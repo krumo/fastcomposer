@@ -6,11 +6,12 @@ import torch.nn.functional as F
 from typing import Any, Optional, Tuple, Union, Dict, List
 from transformers.modeling_outputs import BaseModelOutputWithPooling
 from transformers.models.clip.modeling_clip import (
-    _expand_mask,
+    # _expand_mask,
     CLIPTextTransformer,
     CLIPPreTrainedModel,
     CLIPModel,
 )
+from transformers.modeling_attn_mask_utils import _create_4d_causal_attention_mask, _prepare_4d_attention_mask
 
 import types
 import torchvision.transforms as T
@@ -18,6 +19,8 @@ import gc
 import numpy as np
 
 inference_dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
+
+# updated according to https://github.com/huggingface/transformers/blob/acc394c4f5e1283c19783581790b3dc3105a3697/src/transformers/models/clip/modeling_clip.py#L696
 
 
 class MLP(nn.Module):
@@ -189,7 +192,6 @@ class FastComposerPostfuseModule(nn.Module):
 
 
 class FastComposerTextEncoder(CLIPPreTrainedModel):
-    _build_causal_attention_mask = CLIPTextTransformer._build_causal_attention_mask
 
     @staticmethod
     def from_pretrained(model_name_or_path, **kwargs):
@@ -235,14 +237,17 @@ class FastComposerTextEncoder(CLIPPreTrainedModel):
         hidden_states = self.embeddings(input_ids)
 
         bsz, seq_len = input_shape
-        causal_attention_mask = self._build_causal_attention_mask(
-            bsz, seq_len, hidden_states.dtype
-        ).to(hidden_states.device)
+        # CLIP's text model uses causal mask, prepare it here.
+        # https://github.com/openai/CLIP/blob/cfcffb90e69f37bf2ff1e988237a0fbe41f33c04/clip/model.py#L324
+        causal_attention_mask = _create_4d_causal_attention_mask(
+            input_shape, hidden_states.dtype, device=hidden_states.device
+        )
 
         # expand attention_mask
         if attention_mask is not None:
             # [bsz, seq_len] -> [bsz, 1, tgt_seq_len, src_seq_len]
-            attention_mask = _expand_mask(attention_mask, hidden_states.dtype)
+            # attention_mask = _expand_mask(attention_mask, hidden_states.dtype)
+            attention_mask = _prepare_4d_attention_mask(attention_mask, hidden_states.dtype)
 
         encoder_outputs = self.encoder(
             inputs_embeds=hidden_states,
