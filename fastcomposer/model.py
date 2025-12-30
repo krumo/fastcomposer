@@ -20,7 +20,7 @@ import numpy as np
 
 inference_dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
 
-# updated according to https://github.com/huggingface/transformers/blob/acc394c4f5e1283c19783581790b3dc3105a3697/src/transformers/models/clip/modeling_clip.py#L696
+# updated according to https://github.com/huggingface/transformers/blob/08ab54ada594f8f4cc1e458b1217bf8c53f04dd8/src/transformers/models/clip/modeling_clip.py#L660
 
 
 class MLP(nn.Module):
